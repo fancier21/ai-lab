@@ -1,26 +1,20 @@
 import os
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain.chat_models import init_chat_model
 
 load_dotenv()
 
-client = OpenAI(
+llm = init_chat_model(
+    model="gpt-5-nano",
     api_key=os.getenv("OPENAI_API_KEY"),
     base_url=os.getenv("OPENAI_BASE_URL"),
+    organization=os.getenv("OPENAI_ORGANIZATION"),
 )
 
-response = client.chat.completions.create(
-    model="gpt-5-nano",
-    messages=[
-        {
-            "role": "user",
-            "content": "Write a one-sentence bedtime story about a unicorn.",
-        }
-    ],
-)
+response = llm.invoke("Write a one-sentence bedtime story about a unicorn.")
 
-print(response.choices[0].message.content)
+print(response)
 
 
 def main():
