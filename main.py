@@ -4,7 +4,8 @@ from typing import TypedDict
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langgraph.graph import END, START, MessagesState, StateGraph
+from langchain.tools import tool
+from langgraph.graph import END, START, StateGraph
 
 load_dotenv()
 
@@ -19,75 +20,183 @@ load_dotenv()
 # print(response)
 
 
+# Define our calculator tool (structured tool!)
+@tool
+def calculator_tool(expression: str) -> str:
+    """
+    Evaluates basic mathematical expressions.
+
+    Args:
+        expression: A mathematical expression like "25 + 17" or "100 / 4"
+
+    Returns:
+        The calculated result as a string
+    """
+    try:
+        # For safety, only allow basic math operations
+        allowed_names = {
+            "abs": abs,
+            "round": round,
+            "min": min,
+            "max": max,
+            "sum": sum,
+            "len": len,
+            "int": int,
+            "float": float,
+        }
+        # Evaluate the expression safely
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        return str(result)
+    except Exception as e:
+        return f"Error calculating: {str(e)}"
+
+
 class State(TypedDict):
-    topic: str
-    outline: str
-    draft: str
-    final: str
+    query: str
+    is_math: bool
+    result: str
 
 
-# Node 1: Create outline
-def outline_node(state: State):
-    """Creates an outline for the topic"""
-    print("  🔄 Creating outline...")
-    time.sleep(2)  # Visualize processing time
-    outline = f"Outline for '{state['topic']}':\n1. Introduction\n2. Main Points\n3. Conclusion"
-    return {"outline": outline}
-
-
-# Node 2: Create draft
-def draft_node(state: State):
-    """Creates a draft based on the outline"""
-    print("  🔄 Writing draft...")
-    time.sleep(2)  # Visualize processing time
-    draft = f"Draft: Expanding on the outline for '{state['topic']}'..."
-    return {"draft": draft}
-
-
-# TODO 1: Complete the review_node function
-# Hint: Create final version and return {"final": ...}
-def review_node(state: State):
-    """Reviews and finalizes the content"""
-    print("  🔄 Reviewing and finalizing...")
-    time.sleep(2)  # Visualize processing time
-    final = f"Final: Reviewed and polished content about '{state['topic']}'. Ready to publish!"
-    return {"final": final}  # Replace ___ with "final"
-
-
-print("Building multi-step workflow:\n")
-
-# Build the complete workflow
-workflow = StateGraph(State)
-
-# TODO 2: Add all three nodes to the graph
-# Hint: Use add_node for each node
-workflow.add_node("outline", outline_node)
-workflow.add_node("draft", draft_node)
-workflow.add_node("review", review_node)
-
-# TODO 3: Connect all nodes in sequence
-# Hint: outline → draft → review → END
-workflow.set_entry_point("outline")
-workflow.add_edge("outline", "draft")
-workflow.add_edge("draft", "review")
-workflow.add_edge("review", END)
-
-# Compile and run
-app = workflow.compile()
-print("Graph compiled! Running workflow...\n")
-
-# Execute the complete flow
-result = app.invoke(
-    {"topic": "LangGraph Basics", "outline": "", "draft": "", "final": ""}
+llm = init_chat_model(
+    model="gpt-5-nano",
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL"),
+    organization=os.getenv("OPENAI_ORGANIZATION"),
 )
 
-print("\n" + "=" * 60)
-print("WORKFLOW RESULTS:")
-print(f"Topic: {result['topic']}")
-print(f"Outline: {result['outline']}")
-print(f"Draft: {result['draft']}")
-print(f"Final: {result['final']}")
+
+# Bind the tool to the LLM (this is how tools are attached!)
+llm_with_calculator = llm.bind_tools([calculator_tool])
+
+
+# Classify if query is mathematical
+def classify_node(state: State):
+    """Determines if query is mathematical"""
+    print("  🔄 Analyzing query type...")
+    time.sleep(2)  # Helps visualize classification
+
+    query_lower = state["query"].lower()
+    # Check for math indicators
+    math_keywords = [
+        "+",
+        "-",
+        "*",
+        "/",
+        "plus",
+        "minus",
+        "times",
+        "divided",
+        "calculate",
+        "sum",
+    ]
+    is_math = any(keyword in query_lower for keyword in math_keywords)
+
+    if is_math:
+        print("  ✅ Detected mathematical query")
+    else:
+        print("  ℹ️ Non-mathematical query")
+
+    return {"is_math": is_math}
+
+
+# TODO 1: Complete the router function
+# Hint: Route to "calculator" if is_math is True
+def router(state: State):
+    """Routes to calculator or general response"""
+    if state["is_math"]:
+        return "calculator"
+    return "general"
+
+
+# TODO 2: Complete the calculator_node
+# Hint: Return the result with key "result"
+def calculator_node(state: State):
+    """Uses LLM with calculator tool"""
+    print("  🔄 Processing mathematical query...")
+    print("  📊 Invoking calculator tool...")
+    time.sleep(2)  # Visualize tool selection
+
+    # Ask LLM to use the calculator tool
+    prompt = f"Calculate the following using the calculator tool: {state['query']}"
+    response = llm_with_calculator.invoke(prompt)
+    print(f"  📝 Response: {response}")
+
+    # Extract the answer from the response
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        # LLM called the tool
+        tool_call = response.tool_calls[0]
+        print(f"  🔧 Tool called: {tool_call['name']}")
+        print(f"  📝 Expression: {tool_call['args'].get('expression', '')}")
+
+        # Execute the tool
+        result = calculator_tool.invoke(tool_call["args"])
+        answer = result
+    else:
+        # Fallback to direct response
+        answer = response.content.strip()
+
+    print("  ✅ Calculator returned result")
+    time.sleep(1)  # Show result processing
+
+    return {"result": f"Answer: {answer}"}  # Replace ___ with "result"
+
+
+# General response for non-math queries
+def general_response_node(state: State):
+    """Handles non-mathematical queries"""
+    print("  🔄 Processing non-mathematical query...")
+    time.sleep(2)  # Helps visualize processing
+    print("  ℹ️ Providing general response")
+    return {"result": "This is not a math question. Please ask a calculation!"}
+
+
+print("Building calculator graph:\n")
+
+# Build graph with calculator tool
+workflow = StateGraph(State)
+
+# Add all nodes
+workflow.add_node("classify", classify_node)
+workflow.add_node("calculator", calculator_node)
+workflow.add_node("general", general_response_node)
+
+# TODO 3: Set up routing with conditional edges
+# Hint: Route from "classify" based on router function
+workflow.set_entry_point("classify")
+workflow.add_conditional_edges(
+    "classify",
+    router,
+    {
+        "calculator": "calculator",  # Replace ___ with "calculator"
+        "general": "general",
+    },
+)
+
+# Both paths lead to END
+workflow.add_edge("calculator", END)
+workflow.add_edge("general", END)
+
+# Compile the graph
+app = workflow.compile()
+print("Graph compiled! Testing calculator...\n")
+
+# Test with math query
 print("=" * 60)
+print("TEST 1: Math query")
+print("=" * 60)
+test1 = app.invoke({"query": "What is 25 plus 17?", "is_math": False, "result": ""})
+print(f"Query: '{test1['query']}'")
+print(f"Result: {test1['result']}\n")
+
+# Test with non-math query
+print("=" * 60)
+print("TEST 2: Non-math query")
+print("=" * 60)
+test2 = app.invoke(
+    {"query": "What is the weather today?", "is_math": False, "result": ""}
+)
+print(f"Query: '{test2['query']}'")
+print(f"Result: {test2['result']}")
 
 
 def main():
