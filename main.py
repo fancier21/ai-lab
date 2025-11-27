@@ -20,58 +20,74 @@ load_dotenv()
 
 
 class State(TypedDict):
-    name: str
-    greeting: str
+    topic: str
+    outline: str
+    draft: str
+    final: str
 
 
-# TODO 1: Complete the greet_node function
-# Hint: Return a dictionary with "greeting" key
-def greet_node(state: State):
-    """A node that creates a greeting from the name"""
-    print("  🔄 Processing in greet_node...")
-    time.sleep(2)  # Simulate processing time
-    greeting = f"Hello, {state['name']}!"
-    return {"greeting": greeting}  # Replace ___ with "greeting"
+# Node 1: Create outline
+def outline_node(state: State):
+    """Creates an outline for the topic"""
+    print("  🔄 Creating outline...")
+    time.sleep(2)  # Visualize processing time
+    outline = f"Outline for '{state['topic']}':\n1. Introduction\n2. Main Points\n3. Conclusion"
+    return {"outline": outline}
 
 
-# TODO 2: Complete the enhance_node function
-# Hint: Add "How are you?" to the existing greeting
-def enhance_node(state: State):
-    """A node that enhances the greeting"""
-    print("  🔄 Processing in enhance_node...")
-    time.sleep(2)  # Simulate processing time - helps visualize flow
-    enhanced = state["greeting"] + " How are you?"
-    return {"greeting": enhanced}  # Replace ___ with enhanced
+# Node 2: Create draft
+def draft_node(state: State):
+    """Creates a draft based on the outline"""
+    print("  🔄 Writing draft...")
+    time.sleep(2)  # Visualize processing time
+    draft = f"Draft: Expanding on the outline for '{state['topic']}'..."
+    return {"draft": draft}
 
 
-# NOW we build a graph!
-print("Building your first graph:\n")
+# TODO 1: Complete the review_node function
+# Hint: Create final version and return {"final": ...}
+def review_node(state: State):
+    """Reviews and finalizes the content"""
+    print("  🔄 Reviewing and finalizing...")
+    time.sleep(2)  # Visualize processing time
+    final = f"Final: Reviewed and polished content about '{state['topic']}'. Ready to publish!"
+    return {"final": final}  # Replace ___ with "final"
 
-# TODO 1: Create a StateGraph with our State
-# Hint: StateGraph takes State as parameter
-workflow = StateGraph(State)  # Replace ___ with StateGraph
 
-# TODO 2: Add nodes to the graph
-# Hint: Use add_node method
-workflow.add_node("greet", greet_node)
-workflow.add_node("enhance", enhance_node)  # Replace ___ with add_node
+print("Building multi-step workflow:\n")
 
-# TODO 3: Connect nodes with edges
-# Hint: The flow should be: START → greet → enhance → END
-workflow.set_entry_point("greet")
-workflow.add_edge("greet", "enhance")  # Replace ___ with "enhance"
-workflow.add_edge("enhance", END)
+# Build the complete workflow
+workflow = StateGraph(State)
 
-# Compile the graph
-print("Compiling graph...")
+# TODO 2: Add all three nodes to the graph
+# Hint: Use add_node for each node
+workflow.add_node("outline", outline_node)
+workflow.add_node("draft", draft_node)
+workflow.add_node("review", review_node)
+
+# TODO 3: Connect all nodes in sequence
+# Hint: outline → draft → review → END
+workflow.set_entry_point("outline")
+workflow.add_edge("outline", "draft")
+workflow.add_edge("draft", "review")
+workflow.add_edge("review", END)
+
+# Compile and run
 app = workflow.compile()
-print("✅ Graph compiled successfully!\n")
+print("Graph compiled! Running workflow...\n")
 
-# Run the graph!
-print("Running the graph:")
-result = app.invoke({"name": "Bob", "greeting": ""})
+# Execute the complete flow
+result = app.invoke(
+    {"topic": "LangGraph Basics", "outline": "", "draft": "", "final": ""}
+)
 
-print(f"\nFinal result: {result}")
+print("\n" + "=" * 60)
+print("WORKFLOW RESULTS:")
+print(f"Topic: {result['topic']}")
+print(f"Outline: {result['outline']}")
+print(f"Draft: {result['draft']}")
+print(f"Final: {result['final']}")
+print("=" * 60)
 
 
 def main():
